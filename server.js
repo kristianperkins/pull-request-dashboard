@@ -16,10 +16,16 @@ app.use(express.static('web'));
  */
 app.get('/api/pull-requests', function (req, res) {
   var github = octonode.client(config.githubToken);
+  var search = github.search();
 
-  var repo = github.repo(config.githubUser + '/' + config.githubRepo);
-
-  repo.prs(function(err, pulls, headers) {
+  // repo.prs(function(err, pulls, headers) {
+  search.issues({
+    q: config.githubSearch,
+    sort: 'created',
+    order: 'desc'
+  }, function(err, data, headers) {
+    pulls = data.items;
+    // console.log(pulls);
     if (err) {
       console.log(err);
       return;
@@ -44,9 +50,16 @@ app.get('/api/pull-requests', function (req, res) {
         title: pull.title,
         user: {
           login: pull.user.login,
-          avatar_url: pull.user.avatar_url
+          avatar_url: pull.user.avatar_url,
+          href: pull.user.html_url
         },
-        headSha: pull.head.sha
+        href: pull.html_url,
+        repo: {
+          name: '...'
+        },
+        // pull: pull,
+        // TODO: need to perform another request to get the pull request state
+        status: 'success'
       };
 
       if (!response.meta.users[pull.user.login]) {
@@ -59,18 +72,31 @@ app.get('/api/pull-requests', function (req, res) {
 
       response.meta.users[pull.user.login].count++;
 
-      repo.statuses(pull.head.sha, function(err, statuses, headers) {
-        if (statuses.length > 0) {
-          item.status = statuses[0].state;
-        }
+      // very basic filter to only show certain repos in search results
+      var repo_name;
+      if (typeof config.repos != "undefined" && config.repos != null && config.repos.length > 0) {
+        repo_name = config.repos.find(function(item){return pull.repository_url.endsWith(item)})
+      }
+      else {
+        repo_name = pull.repository_url.split('/').slice(-2).join('/');
+      }
+      if (repo_name) {
+        item.repo.name = repo_name;
+        item.repo.url = pull.repository_url;
+        response.pullRequests.push(item);
+      }
 
+      // repo.statuses(pull.head.sha, function(err, statuses, headers) {
+      //   if (statuses.length > 0) {
+      //     item.status = statuses[0].state;
+      //   }
+      //
         statusesReturned++;
         if (statusesReturned === pulls.length) {
           res.send(response);
         }
-      });
+      // });
 
-      response.pullRequests.push(item);
     });
   });
 });
