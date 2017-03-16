@@ -12,20 +12,38 @@ var config = jsonfile.readFileSync('./config.json');
 app.use(express.static('web'));
 
 /**
+ * Get pull request status
+ */
+app.get('/api/pull-request/:owner/:repo/:pullId', function(req, res) {
+  var repoName = req.params.owner + '/' + req.params.repo;
+  var github = octonode.client(config.githubToken);
+  var pr = github.pr(repoName, req.params.pullId);
+  pr.info(function(err, data, headers) {
+
+    var repo = github.repo(repoName);
+    repo.statuses(data.head.sha, function(err, statuses, headers) {
+      if (statuses.length > 0) {
+        res.send( {"sha": data.head.sha, "status": statuses[0].state });
+      } else {
+        res.send( {"sha": data.head.sha, "status": "unknown" });
+      }
+    });
+  });
+});
+
+/**
  * /api/pull-requests route
  */
 app.get('/api/pull-requests', function (req, res) {
   var github = octonode.client(config.githubToken);
   var search = github.search();
 
-  // repo.prs(function(err, pulls, headers) {
   search.issues({
     q: config.githubSearch,
     sort: 'created',
     order: 'desc'
   }, function(err, data, headers) {
     pulls = data.items;
-    // console.log(pulls);
     if (err) {
       console.log(err);
       return;
@@ -58,8 +76,8 @@ app.get('/api/pull-requests', function (req, res) {
           name: '...'
         },
         // pull: pull,
-        // TODO: need to perform another request to get the pull request state
-        status: 'success'
+        // status filled via /api/pull-request/:owner/:repo/:id
+        status: 'unknown'
       };
 
       if (!response.meta.users[pull.user.login]) {
@@ -86,17 +104,10 @@ app.get('/api/pull-requests', function (req, res) {
         response.pullRequests.push(item);
       }
 
-      // repo.statuses(pull.head.sha, function(err, statuses, headers) {
-      //   if (statuses.length > 0) {
-      //     item.status = statuses[0].state;
-      //   }
-      //
-        statusesReturned++;
-        if (statusesReturned === pulls.length) {
-          res.send(response);
-        }
-      // });
-
+      statusesReturned++;
+      if (statusesReturned === pulls.length) {
+        res.send(response);
+      }
     });
   });
 });
