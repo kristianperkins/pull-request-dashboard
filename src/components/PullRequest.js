@@ -17,7 +17,7 @@ export default class PullRequest extends React.Component {
     </li>;
   }
 
-  componentDidMount() {
+  componentDidUpdate() {
     var self = this;
     jQuery.ajax({
       url: '/api/pull-request/' + this.props.pullRequest.repo.name + '/' + this.props.pullRequest.number,
